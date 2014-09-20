@@ -53,15 +53,28 @@ The symbols are as follows:
 Install
 -------
 
-#. Create the directory ``~/.zsh/git-prompt`` if it does not exist (this location is customizable).
-#. Move the file ``gitstatus.py`` into ``~/.zsh/git-prompt/``.
-#. Source the file ``zshrc.sh`` from your ``~/.zshrc`` config file, and, configure your prompt. So, somewhere in ``~/.zshrc``, you should have::
+#. Clone this repository somewhere on your hard drive.
+#. Source the file ``zshrc.sh`` from your ``~/.zshrc`` config file, and configure your prompt. So, somewhere in ``~/.zshrc``, you should have::
 
 	source path/to/zshrc.sh
 	# an example prompt
 	PROMPT='%B%m%~%b$(git_super_status) %# '
-
-#. You may also redefine the function ``git_super_status`` (after the ``source`` statement) to adapt it to your needs (to change the order in which the information is displayed).  Define the variable ``ZSH_THEME_GIT_PROMPT_CACHE`` in order to enable caching.  You may also change a number of variables (which name start with ``ZSH_THEME_GIT_PROMPT_``) to change the appearance of the prompt.  Take a look in the file ``zshrc.sh`` to see how the function ``git_super_status`` is defined, and what variables are available.
 #. Go in a git repository and test it!
+
+Haskell (optional)
+##################
+
+There is now a Haksell implementation as well, which can be four to six times faster than the Python one. The reason is not that Haskell is faster in itself (although it is), but that this implementation calls ``git`` only once. To install, do the following:
+
+#. Make sure Haskell is installed on your system
+#. Run ``cabal build`` from this folder
+#. Define the variable ``GIT_PROMPT_EXECUTABLE="haskell"`` somewhere in your ``.zshrc``
+
+Customisation
+-------------
+
+* You may redefine the function ``git_super_status`` (after the ``source`` statement) to adapt it to your needs (to change the order in which the information is displayed).
+* Define the variable ``ZSH_THEME_GIT_PROMPT_CACHE`` in order to enable caching.
+* You may also change a number of variables (which name start with ``ZSH_THEME_GIT_PROMPT_``) to change the appearance of the prompt.  Take a look in the file ``zshrc.sh`` to see how the function ``git_super_status`` is defined, and what variables are available.
 
 **Enjoy!**

@@ -1,5 +1,12 @@
 # To install source this file from your .zshrc file
-export __GIT_PROMPT_DIR=$(dirname $0)
+
+# see documentation at http://linux.die.net/man/1/zshexpn
+# A: finds the absolute path, even if this is symlinked
+# h: equivalent to dirname
+export __GIT_PROMPT_DIR=${0:A:h}
+
+export GIT_PROMPT_EXECUTABLE=${GIT_PROMPT_USE_PYTHON:-"python"}
+
 # Initialize colors.
 autoload -U colors
 colors
@@ -36,8 +43,14 @@ function chpwd_update_git_vars() {
 function update_current_git_vars() {
     unset __CURRENT_GIT_STATUS
 
-    local gitstatus="$__GIT_PROMPT_DIR/gitstatus.py"
-    _GIT_STATUS=`python ${gitstatus} 2>/dev/null`
+    if [[ "$GIT_PROMPT_EXECUTABLE" == "python" ]]; then
+        local gitstatus="$__GIT_PROMPT_DIR/gitstatus.py"
+        _GIT_STATUS=`python ${gitstatus} 2>/dev/null`
+    fi
+    if [[ "$GIT_PROMPT_EXECUTABLE" == "haskell" ]]; then
+        local gitstatus="$__GIT_PROMPT_DIR/dist/build/gitstatus/gitstatus"
+        _GIT_STATUS=`${gitstatus}`
+    fi
     __CURRENT_GIT_STATUS=("${(@f)_GIT_STATUS}")
 	GIT_BRANCH=$__CURRENT_GIT_STATUS[1]
 	GIT_AHEAD=$__CURRENT_GIT_STATUS[2]
@@ -85,12 +98,12 @@ ZSH_THEME_GIT_PROMPT_PREFIX="("
 ZSH_THEME_GIT_PROMPT_SUFFIX=")"
 ZSH_THEME_GIT_PROMPT_SEPARATOR="|"
 ZSH_THEME_GIT_PROMPT_BRANCH="%{$fg_bold[magenta]%}"
-ZSH_THEME_GIT_PROMPT_STAGED="%{$fg[red]%}●"
-ZSH_THEME_GIT_PROMPT_CONFLICTS="%{$fg[red]%}✖"
-ZSH_THEME_GIT_PROMPT_CHANGED="%{$fg[blue]%}✚"
-ZSH_THEME_GIT_PROMPT_BEHIND="↓"
-ZSH_THEME_GIT_PROMPT_AHEAD="↑"
-ZSH_THEME_GIT_PROMPT_UNTRACKED="…"
-ZSH_THEME_GIT_PROMPT_CLEAN="%{$fg_bold[green]%}✔"
+ZSH_THEME_GIT_PROMPT_STAGED="%{$fg[red]%}%{●%G%}"
+ZSH_THEME_GIT_PROMPT_CONFLICTS="%{$fg[red]%}%{✖%G%}"
+ZSH_THEME_GIT_PROMPT_CHANGED="%{$fg[blue]%}%{✚%G%}"
+ZSH_THEME_GIT_PROMPT_BEHIND="%{↓%G%}"
+ZSH_THEME_GIT_PROMPT_AHEAD="%{↑%G%}"
+ZSH_THEME_GIT_PROMPT_UNTRACKED="%{…%G%}"
+ZSH_THEME_GIT_PROMPT_CLEAN="%{$fg_bold[green]%}%{✔%G%}"
 
 
