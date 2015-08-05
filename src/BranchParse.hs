@@ -1,8 +1,12 @@
-module BranchParse (branchInfo, BranchInfo, noBranchInfo, Branch) where
+module BranchParse where
 
-import Control.Applicative hiding ((<|>), many, optional)
-import Text.Parsec
-import Text.Parsec.String
+import Control.Applicative ((<$>), (<*>), (<*), (*>), (<$), pure)
+import Text.Parsec (digit, string, char, eof, anyChar, 
+				   many, many1, manyTill, noneOf, between,
+				   parse, ParseError, (<|>), try)
+import Text.Parsec.String (Parser)
+import Test.QuickCheck (Arbitrary(arbitrary), oneof, getPositive, suchThat)
+import Data.List (isPrefixOf, isSuffixOf, isInfixOf)
 
 {-
  The idea is to parse the first line of the git status command.
@@ -14,45 +18,80 @@ or
  	## master...origin/master [ahead 3, behind 4]
  -}
 
-type AheadBehind = (Int, Int)
-type Branch = String
-type BranchInfo = ((Maybe Branch, Maybe Branch), Maybe AheadBehind)
+data Distance = Ahead Int | Behind Int | AheadBehind Int Int deriving (Eq)
 
-noBranchInfo :: BranchInfo
-noBranchInfo = ((Nothing, Nothing), Nothing)
+instance Show Distance where
+	show (Ahead i) = "[ahead " ++ show i ++ "]"
+	show (Behind i) = "[behind " ++ show i ++ "]"
+	show (AheadBehind i j) ="[ahead " ++ show i ++ ", behind " ++ show j ++ "]"
 
-newRepo :: Parser BranchInfo
+instance Arbitrary Distance where
+	arbitrary = oneof [
+				   Ahead <$> pos,
+				   Behind <$> pos,
+				   AheadBehind <$> pos <*> pos]
+		where
+			pos = getPositive <$> arbitrary
+
+{- Branch type -}
+
+newtype Branch = MkBranch String deriving (Eq)
+
+instance Show Branch where
+		show (MkBranch b) = b
+
+isValidBranch :: String -> Bool
+isValidBranch b = not . or $ [null,
+							 (' ' `elem`),
+							 (".." `isInfixOf`),
+							 ("." `isPrefixOf`),
+							 ("." `isSuffixOf`)]
+							 <*> pure b
+
+instance Arbitrary Branch where
+	arbitrary = MkBranch <$> arbitrary `suchThat` isValidBranch
+
+data Remote = MkRemote Branch (Maybe Distance) deriving (Eq, Show)
+
+getDistance :: Remote -> Maybe Distance
+getDistance (MkRemote _ md) = md
+
+data BranchInfo = MkBranchInfo Branch (Maybe Remote) deriving (Eq, Show)
+
+type MBranchInfo = Maybe BranchInfo
+
+newRepo :: Parser MBranchInfo
 newRepo = 
-	fmap (\ s -> ((Just s, Nothing), Nothing))
+	fmap (\ branch -> Just $ MkBranchInfo (MkBranch branch) Nothing)
 		$ string "Initial commit on " *> many anyChar <* eof
 
-noBranch :: Parser BranchInfo
+noBranch :: Parser MBranchInfo
 noBranch = 
-	noBranchInfo
-		<$ many (noneOf "(") <* string "(no branch)" <* eof
+	Nothing
+		<$ manyTill anyChar (try $ string " (no branch)") <* eof
 
 trackedBranch :: Parser Branch
-trackedBranch = manyTill anyChar (string "...")
+trackedBranch = MkBranch <$> manyTill anyChar (try $ string "...")
 
-branchRemoteTracking :: Parser BranchInfo
+branchRemoteTracking :: Parser MBranchInfo
 branchRemoteTracking = 
-	(\ bn tracking behead -> ((Just bn, Just tracking), Just behead))
+	(\ branch tracking behead -> Just $ MkBranchInfo branch $ Just $ MkRemote (MkBranch tracking) (Just behead))
 		<$> trackedBranch
 		<*> many (noneOf " ") <* char ' '
 		<*> inBrackets
 
-branchRemote :: Parser BranchInfo
+branchRemote :: Parser MBranchInfo
 branchRemote = 
-	(\ bn tracking -> ((Just bn, Just tracking), Nothing))
+	(\ branch tracking -> Just $ MkBranchInfo branch $ Just $ MkRemote (MkBranch tracking) Nothing)
 		<$> trackedBranch
 		<*> many (noneOf " ") <* eof
 
-branchOnly :: Parser BranchInfo
+branchOnly :: Parser MBranchInfo
 branchOnly = 
-	(\ bn -> ((Just bn, Nothing), Nothing))
+	(\ branch -> Just $ MkBranchInfo (MkBranch branch) Nothing)
 		<$> many (noneOf " ") <* eof
 
-branchParser :: Parser BranchInfo
+branchParser :: Parser MBranchInfo
 branchParser = 
 			try noBranch
 		<|> try newRepo
@@ -60,24 +99,31 @@ branchParser =
 		<|> try branchRemote
 		<|> branchOnly
 
+branchParser' :: Parser MBranchInfo
+branchParser' = (string "## ") >> branchParser
 
-inBrackets :: Parser AheadBehind
+inBrackets :: Parser Distance
 inBrackets = between (char '[') (char ']') (behind <|> try aheadBehind <|> ahead)
 
-makeAheadBehind :: String -> (Int -> AheadBehind) -> Parser AheadBehind
-makeAheadBehind name cons = 
-	cons . read <$> (string (name ++ " ") *> many1 digit)
+makeAheadBehind :: String -> (Int -> Distance) -> Parser Distance
+makeAheadBehind name constructor = 
+	constructor . read <$> (string (name ++ " ") *> many1 digit)
 
-ahead :: Parser AheadBehind
-ahead = makeAheadBehind "ahead" (\ n -> (n,0))
-behind :: Parser AheadBehind
-behind = makeAheadBehind "behind" (\ n -> (0,n))
-aheadBehind :: Parser AheadBehind
+ahead :: Parser Distance
+ahead = makeAheadBehind "ahead" Ahead
+behind :: Parser Distance
+behind = makeAheadBehind "behind" Behind
+aheadBehind :: Parser Distance
 aheadBehind =
-	(\ (a,_) (_,b) -> (a,b))
+	(\ (Ahead aheadBy) (Behind behindBy) -> AheadBehind aheadBy behindBy)
 		<$> ahead
 		<* string ", "
 		<*> behind
 
-branchInfo :: String -> Either ParseError BranchInfo
-branchInfo = parse branchParser ""
+branchInfo :: String -> Either ParseError MBranchInfo
+branchInfo = parse branchParser' ""
+
+pairFromDistance :: Distance -> (Int, Int)
+pairFromDistance (Ahead n) = (n,0)
+pairFromDistance (Behind n) = (0,n)
+pairFromDistance (AheadBehind m n) = (m,n)
